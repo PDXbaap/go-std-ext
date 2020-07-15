@@ -51,11 +51,11 @@ func init() {
 	app.Usage = "PDX Stdlib 扩展"
 	app.Version = "0.0.1"
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "goroot,g",
 			Usage: "go env 中 GOROOT 对应的目录, pdx 的扩展会被解压到这个目录中",
 		},
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:  "revert,r",
 			Usage: "还原标准库",
 		},
