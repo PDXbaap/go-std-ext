@@ -23,6 +23,7 @@ import (
 var (
 	supports = []string{
 		"go1.14.4",
+		"go1.14.5",
 	}
 	app = cli.NewApp()
 )
