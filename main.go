@@ -79,7 +79,7 @@ func basepath() string {
 func action(ctx *cli.Context) error {
 	base := basepath()
 	if ctx.IsSet("goroot") {
-		base = path.Join(ctx.GlobalString("goroot"), "src")
+		base = path.Join(ctx.String("goroot"), "src")
 	}
 	fmt.Println("GOROOT : ", base)
 	// 如果文件不存在，则返回错误
