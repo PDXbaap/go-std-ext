@@ -24,6 +24,9 @@ var (
 	supports = []string{
 		"go1.14.4",
 		"go1.14.5",
+		"go1.14.6",
+		"go1.14.7",
+		"go1.15",
 	}
 	app = cli.NewApp()
 )
@@ -49,7 +52,7 @@ func (d *Dict) List(callback func(item *DictItem) error) {
 func init() {
 	app.Name = os.Args[0]
 	app.Usage = "PDX Stdlib 扩展"
-	app.Version = "0.0.1"
+	app.Version = "0.0.2"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:  "goroot,g",
