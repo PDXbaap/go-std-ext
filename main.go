@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PDXbaap/go-std-ext/statik"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -27,7 +27,9 @@ var (
 		"go1.14.5",
 		"go1.14.6",
 		"go1.14.7",
+		"go1.14.8",
 		"go1.15",
+		"go1.15.1",
 	}
 	vsn2tag = func(vsn string) string { return strings.ReplaceAll(vsn, ".", "_") }
 	app     = cli.NewApp()
@@ -54,7 +56,7 @@ func (d *Dict) List(callback func(item *DictItem) error) {
 func init() {
 	app.Name = os.Args[0]
 	app.Usage = "PDX Stdlib 扩展"
-	app.Version = "0.0.2"
+	app.Version = "0.0.3"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:  "goroot,g",
@@ -107,23 +109,6 @@ func rebuild(_ *cli.Context) error {
 	err = ioutil.WriteFile(path.Join(dir, "statik", "utils.go"), []byte(utilCode), 00755)
 	if err != nil {
 		panic(err)
-	}
-
-	for _, tag := range tags {
-		fs, err := statik.GetFileSystem(tag)
-		if err != nil {
-			panic(err)
-		}
-		hf, err := fs.Open("/dict.json")
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("---------------------------------------------------------------------------------------", tag)
-		dict, err := ioutil.ReadAll(hf)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(dict))
 	}
 
 	return nil
@@ -386,7 +371,7 @@ func main() {
 
 func utilTempInst(al []string) string {
 	var buf = new(bytes.Buffer)
-	_ = utilTemp.Execute(buf, map[string]interface{}{"DataList": al,})
+	_ = utilTemp.Execute(buf, map[string]interface{}{"DataList": al})
 	return buf.String()
 }
 
