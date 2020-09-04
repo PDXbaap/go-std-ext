@@ -8,3 +8,5 @@ require (
 	github.com/urfave/cli v1.22.4
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 )
+
+//replace github.com/urfave/cli => /Users/liangc/app/gopath/src/github.com/urfave/cli

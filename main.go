@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	_ "github.com/PDXbaap/go-std-ext/statik"
-	"github.com/rakyll/statik/fs"
+	"github.com/PDXbaap/go-std-ext/statik"
 	"github.com/urfave/cli"
 	"io/ioutil"
 	"log"
@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 )
 
 var (
@@ -28,7 +29,8 @@ var (
 		"go1.14.7",
 		"go1.15",
 	}
-	app = cli.NewApp()
+	vsn2tag = func(vsn string) string { return strings.ReplaceAll(vsn, ".", "_") }
+	app     = cli.NewApp()
 )
 
 type DictItem struct {
@@ -63,7 +65,68 @@ func init() {
 			Usage: "还原标准库",
 		},
 	}
+	app.Commands = []*cli.Command{
+		{
+			Name:   "rebuild",
+			Action: rebuild,
+		},
+	}
 	app.Action = action
+}
+
+// statik -src public/go1.14.4 -dest statik -p go1_14_4
+func rebuild(_ *cli.Context) error {
+	dir, _ := os.Getwd()
+	fis, err := ioutil.ReadDir(path.Join(dir, "public"))
+	if err != nil {
+		panic(err)
+	}
+	var tags = make([]string, 0)
+	for _, f := range fis {
+		_vsn := f.Name()
+		_tag := strings.ReplaceAll(_vsn, ".", "_")
+		rtn, err := syncexec("statik", "-src", fmt.Sprintf("public/%s", _vsn), "-dest", "statik", "-p", _tag)
+		if err != nil {
+			panic(err)
+		}
+		codePath := path.Join(dir, "statik", _tag, "statik.go")
+		fmt.Println(string(rtn), codePath)
+		code, err := ioutil.ReadFile(codePath)
+		if err != nil {
+			panic(err)
+		}
+		//fs.RegisterWithNamespace("go1_15",data)
+		code = bytes.ReplaceAll(code, []byte("fs.Register("), []byte(fmt.Sprintf("fs.RegisterWithNamespace(\"%s\", ", _tag)))
+		err = ioutil.WriteFile(codePath, code, 00755)
+		if err != nil {
+			panic(err)
+		}
+		tags = append(tags, _tag)
+	}
+	utilCode := utilTempInst(tags)
+	err = ioutil.WriteFile(path.Join(dir, "statik", "utils.go"), []byte(utilCode), 00755)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, tag := range tags {
+		fs, err := statik.GetFileSystem(tag)
+		if err != nil {
+			panic(err)
+		}
+		hf, err := fs.Open("/dict.json")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("---------------------------------------------------------------------------------------", tag)
+		dict, err := ioutil.ReadAll(hf)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(dict))
+	}
+
+	return nil
 }
 
 func basepath() string {
@@ -109,31 +172,23 @@ func setup(base string, revert bool) error {
 		panic(err)
 	}
 	fmt.Println("VERSION : ", string(vsn))
-	fs, err := fs.New()
-	if err != nil {
-		panic(err)
-	}
-	f, err := fs.Open("/")
-	defer f.Close()
-	if err != nil {
-		panic(err)
-	}
-	ff, err := f.Readdir(0)
-	if err != nil {
-		panic(err)
-	}
-	for _, f := range ff {
-		if strings.Contains(string(vsn), f.Name()) {
-			f1, err := fs.Open(path.Join("/", f.Name(), "dict.json"))
-			defer f1.Close()
+
+	for _, _v := range supports {
+		if strings.Contains(string(vsn), _v) {
+			fs, err := statik.GetFileSystem(vsn2tag(_v))
+			if err != nil {
+				return err
+			}
+			f1, err := fs.Open("/dict.json")
 			if err != nil {
 				panic(err)
 			}
+			defer func() { _ = f1.Close() }()
 			_, err = f1.Stat()
 			if err != nil {
 				panic(err)
 			}
-			//fmt.Println(f1Stat.IsDir(), " ", f1Stat.Name())
+
 			j, err := ioutil.ReadAll(f1)
 			if err != nil {
 				panic(err)
@@ -175,7 +230,7 @@ func setup(base string, revert bool) error {
 								panic(err)
 							}
 						}
-						fsrc, _ := fs.Open(path.Join("/", f.Name(), item.Source))
+						fsrc, _ := fs.Open(path.Join("/", item.Source))
 						defer fsrc.Close()
 						srcdata, _ := ioutil.ReadAll(fsrc)
 						if err = ioutil.WriteFile(path.Join(base, item.Output), srcdata, 0644); err != nil {
@@ -186,7 +241,7 @@ func setup(base string, revert bool) error {
 					if revert {
 						_ = os.Remove(path.Join(base, item.Output))
 					} else {
-						fsrc, _ := fs.Open(path.Join("/", f.Name(), item.Source))
+						fsrc, _ := fs.Open(path.Join("/", item.Source))
 						defer fsrc.Close()
 						srcdata, _ := ioutil.ReadAll(fsrc)
 						if err = ioutil.WriteFile(path.Join(base, item.Output), srcdata, 0644); err != nil {
@@ -194,13 +249,105 @@ func setup(base string, revert bool) error {
 						}
 					}
 				}
-
 				return nil
 			})
 			return nil
 		}
 	}
+	/*
+		fs, err := fs.New()
+		if err != nil {
+			panic(err)
+		}
+		f, err := fs.Open("/")
+		defer f.Close()
+		if err != nil {
+			panic(err)
+		}
+		ff, err := f.Readdir(0)
+		if err != nil {
+			panic(err)
+		}
 
+		for _, f := range ff {
+			if strings.Contains(string(vsn), f.Name()) {
+				f1, err := fs.Open(path.Join("/", f.Name(), "dict.json"))
+				if err != nil {
+					panic(err)
+				}
+				defer func() { _ = f1.Close() }()
+				_, err = f1.Stat()
+				if err != nil {
+					panic(err)
+				}
+				//fmt.Println(f1Stat.IsDir(), " ", f1Stat.Name())
+				j, err := ioutil.ReadAll(f1)
+				if err != nil {
+					panic(err)
+				}
+				var dict Dict
+				_ = json.Unmarshal(j, &dict)
+				dict.List(func(item *DictItem) error {
+					//fmt.Println(path.Join(base, item.Output), item.Md5)
+					if item.Action == "modify" {
+						if revert {
+							of, err := os.Open(path.Join(base, item.Output+".old"))
+							if err != nil {
+								panic(err)
+							}
+							data, err := ioutil.ReadAll(of)
+							if err != nil {
+								panic(err)
+							}
+							//fmt.Println(path.Join(base, item.Output))
+							err = ioutil.WriteFile(path.Join(base, item.Output), data, 0644)
+							if err != nil {
+								panic(err)
+							}
+							err = os.Remove(path.Join(base, item.Output+".old"))
+							if err != nil {
+								panic(err)
+							}
+						} else {
+							fout, err := ioutil.ReadFile(path.Join(base, item.Output))
+							if err != nil {
+								panic(err)
+							}
+							m5 := md5.New()
+							m5.Write(fout)
+							h := m5.Sum(nil)
+							if hex.EncodeToString(h) != item.Md5 {
+								// backoff
+								if err = os.Rename(path.Join(base, item.Output), path.Join(base, item.Output+".old")); err != nil {
+									panic(err)
+								}
+							}
+							fsrc, _ := fs.Open(path.Join("/", f.Name(), item.Source))
+							defer fsrc.Close()
+							srcdata, _ := ioutil.ReadAll(fsrc)
+							if err = ioutil.WriteFile(path.Join(base, item.Output), srcdata, 0644); err != nil {
+								panic(err)
+							}
+						}
+					} else if item.Action == "add" {
+						if revert {
+							_ = os.Remove(path.Join(base, item.Output))
+						} else {
+							fsrc, _ := fs.Open(path.Join("/", f.Name(), item.Source))
+							defer fsrc.Close()
+							srcdata, _ := ioutil.ReadAll(fsrc)
+							if err = ioutil.WriteFile(path.Join(base, item.Output), srcdata, 0644); err != nil {
+								panic(err)
+							}
+						}
+					}
+
+					return nil
+				})
+				return nil
+			}
+		}
+	*/
 	fmt.Println(">###### support list ######>")
 	for _, v := range supports {
 		fmt.Println(v)
@@ -231,7 +378,31 @@ func syncexec(bin string, args ...string) (rtn []byte, err error) {
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
+		fmt.Println(err)
 		os.Exit(-1)
 	}
 	fmt.Println("Success.")
 }
+
+func utilTempInst(al []string) string {
+	var buf = new(bytes.Buffer)
+	_ = utilTemp.Execute(buf, map[string]interface{}{"DataList": al,})
+	return buf.String()
+}
+
+var utilTemp, _ = template.New("util").Parse(`package statik
+import (
+{{range $idx, $itm := .DataList}}
+	_ "github.com/PDXbaap/go-std-ext/statik/{{$itm}}"
+{{end}}
+	"github.com/rakyll/statik/fs"
+	"net/http"
+)
+func GetFileSystem(tag string) (http.FileSystem, error) {
+	f, err := fs.NewWithNamespace(tag)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+`)
