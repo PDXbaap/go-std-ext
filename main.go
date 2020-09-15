@@ -28,8 +28,10 @@ var (
 		"go1.14.6",
 		"go1.14.7",
 		"go1.14.8",
+		"go1.14.9",
 		"go1.15",
 		"go1.15.1",
+		"go1.15.2",
 	}
 	vsn2tag = func(vsn string) string { return strings.ReplaceAll(vsn, ".", "_") }
 	app     = cli.NewApp()
@@ -56,7 +58,7 @@ func (d *Dict) List(callback func(item *DictItem) error) {
 func init() {
 	app.Name = os.Args[0]
 	app.Usage = "PDX Stdlib 扩展"
-	app.Version = "0.0.3"
+	app.Version = "0.0.4"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:  "goroot,g",
